@@ -3,3 +3,4 @@ tools
 *__pycache__*
 .idea
 go.sum
+results

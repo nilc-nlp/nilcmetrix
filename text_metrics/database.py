@@ -179,6 +179,23 @@ class Helper(object):
     def get_frequency(self, word):
         return self._session.query(Frequency).filter_by(word=word).first()
 
+    def get_frequencies_batch(self, words):
+        """Get frequencies for multiple words in a single query.
+
+        :words: list of words to query
+        :returns: dict mapping word -> Frequency object (or None if not found)
+        """
+        if not words:
+            return {}
+        # remove duplicates
+        unique_words = list(set(w.lower() for w in words))
+        # single db lookup
+        results = self._session.query(Frequency).filter(
+            Frequency.word.in_(unique_words)
+        ).all()
+        # build final dict
+        return {f.word: f for f in results}
+
     def get_hypernyms(self, verb):
         """@todo: Docstring for get_hypernyms.
 

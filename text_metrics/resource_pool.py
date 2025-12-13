@@ -461,14 +461,18 @@ class DefaultResourcePool(ResourcePool):
         """
         content_words = self.get('content_words', text)
         db_helper = self.get('db_helper')
-        frequencies = list(content_words)
+        all_words = [word.lower() for sent in content_words for word in sent]
+        freq_dict = db_helper.get_frequencies_batch(all_words)
 
-        for i in range(len(frequencies)):
-            frequencies[i] = [db_helper.get_frequency(word.lower())
-                              for word in content_words[i]]
-            frequencies[i] = [f.freq if f is not None else 0
-                              for f in frequencies[i]]
-
+        frequencies = []
+        for sentence in content_words:
+            sent_freqs = []
+            for word in sentence:
+                # now its possible to do only 1 query and use the get method on the dict to get the frequencies
+                freq_obj = freq_dict.get(word.lower())
+                sent_freqs.append(freq_obj.freq if freq_obj is not None else 0)
+            frequencies.append(sent_freqs)
+        
         return frequencies
 
 
@@ -479,7 +483,7 @@ class DefaultResourcePool(ResourcePool):
         :returns: @todo
         """
         words = self.get('words_with_tags_in_sents', text)
-        brwac_freq = brwac_frequencies()
+        brwac_freq = self.get('brwac_frequencies')
         frequencies = list(words)
         for i in range(len(frequencies)):
             frequencies[i] = [brwac_freq[word.lower()] if word.lower() in brwac_freq else 0
@@ -499,7 +503,7 @@ class DefaultResourcePool(ResourcePool):
         :returns: @todo
         """
         content_words = self.get('content_words_with_tags', text)
-        brwac_freq = brwac_frequencies()
+        brwac_freq = self.get('brwac_frequencies')
         frequencies = list(content_words)
 
         for i in range(len(frequencies)):
@@ -516,7 +520,7 @@ class DefaultResourcePool(ResourcePool):
         :returns: @todo
         """
         words = self.get('words_in_sents', text)
-        bra_freq = brasileiro_frequencies()
+        bra_freq = self.get('brasileiro_frequencies')
         frequencies = list(words)
 
         for i in range(len(frequencies)):
@@ -533,7 +537,7 @@ class DefaultResourcePool(ResourcePool):
         :returns: @todo
         """
         content_words = self.get('content_words', text)
-        bra_freq = brasileiro_frequencies()
+        bra_freq = self.get('brasileiro_frequencies')
         frequencies = list(content_words)
 
         for i in range(len(frequencies)):
