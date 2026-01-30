@@ -6,11 +6,14 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
 	"github.com/sidleal/simpligo-cloze/web/tools/senter"
 )
+
+var simpligoRankingURI = "http://simpligo-ranking:8080/api/v1/ranking/ranking3f"
 
 type SimpligoRankingResultItem struct {
 	Index    int    `json:"i"`
@@ -20,6 +23,12 @@ type SimpligoRankingResultItem struct {
 }
 
 func simpligoRankingHandler(w http.ResponseWriter, r *http.Request) {
+
+	env_URI := os.Getenv("SIMPLIGO_RANKING_URI")
+	if len(strings.TrimSpace(env_URI)) == 0 {
+		simpligoRankingURI = env_URI
+	}
+	log.Println(simpligoRankingURI)
 
 	pInfo := pageInfo
 	pInfo.ShowResults = false
@@ -87,7 +96,7 @@ func simpligoRankingHandler(w http.ResponseWriter, r *http.Request) {
 func callSimpligoRanking(featList string) []string {
 	ret := []string{}
 
-	resp, err := http.Post("http://10.11.14.33:5000/api/v1/ranking/ranking3f", "text", bytes.NewReader([]byte(featList)))
+	resp, err := http.Post(simpligoRankingURI, "text", bytes.NewReader([]byte(featList)))
 	if err != nil {
 		log.Println("Error: " + err.Error())
 		return ret
