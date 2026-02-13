@@ -15,11 +15,13 @@
 # You should have received a copy of the GNU General Public License along with
 # this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import unicode_literals, print_function, division
+from __future__ import division, print_function, unicode_literals
+
+from nltk.util import trigrams
+
 from text_metrics import base
 from text_metrics.resource_pool import rp as default_rp
 from text_metrics.utils import reverse_tree
-from nltk.util import trigrams
 
 
 class YngveComplexity(base.Metric):
@@ -272,6 +274,8 @@ class CrossEntropy(base.Metric):
         lm = rp.language_model()
 
         sents = [lm.clean(sent) for sent in rp.sentences(t)]
+        # Remove empty sentences before calculating the score. Avoid division by zero.
+        sents = [sent for sent in sents if sent]
         scores = [-1/len(sent) * lm.score(sent) for sent in sents]
 
         return sum(scores) / len(scores) if scores else 0
