@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -375,34 +377,51 @@ func nilcMetrixEnHandler(w http.ResponseWriter, r *http.Request) {
 	nilcMetrixCall(w, r, "-en")
 }
 
-const URL_RECAPTCHA = "https://www.google.com/recaptcha/api/siteverify?secret=yyyyyyy&response="
+const SecretKey = "yyy"
+const VerifyURL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
-func validateGoogleRecaptcha(r *http.Request, data string) bool {
-	if data == "" {
-		log.Println("Error: empty recaptcha data")
-		return false
+type TurnstileResponse struct {
+	Success     bool     `json:"success"`
+	ErrorCodes  []string `json:"error-codes"`
+	ChallengeTS string   `json:"challenge_ts"`
+	Hostname    string   `json:"hostname"`
+}
+
+type TurnstileRequest struct {
+	Secret   string `json:"secret"`
+	Response string `json:"response"`
+	RemoteIP string `json:"remoteip,omitempty"`
+}
+
+func ValidateTurnstile(token string, remoteip string) bool {
+	reqBody := TurnstileRequest{
+		Secret:   SecretKey,
+		Response: token,
+		RemoteIP: remoteip,
 	}
 
-	url := URL_RECAPTCHA + data + "&remoteip=" + r.RemoteAddr
-
-	log.Println("recaptcha", url)
-
-	resp, err := http.Get(url)
+	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
-		log.Println("Error: " + err.Error())
+		log.Println(err)
 		return false
 	}
 
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	resp, err := client.Post(VerifyURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		fmt.Printf("Turnstile validation error: %v\n", err)
+		return false
+	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Println("Error reading response: " + err.Error())
+
+	var result TurnstileResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Println(err)
 		return false
 	}
 
-	log.Println(string(body))
-
-	return resp.StatusCode == 200
+	return result.Success
 }
 
 func nilcMetrixCall(w http.ResponseWriter, r *http.Request, lang string) {
@@ -423,7 +442,7 @@ func nilcMetrixCall(w http.ResponseWriter, r *http.Request, lang string) {
 		} else {
 
 			captchaData := r.FormValue("g-recaptcha-response")
-			isHuman := validateGoogleRecaptcha(r, captchaData)
+			isHuman := ValidateTurnstile(captchaData, r.RemoteAddr)
 			if !isHuman {
 				ret := "Invalid Re-Captcha Validation."
 				log.Println(ret)
@@ -628,7 +647,7 @@ func palavrasHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	key := vars["key"]
-	if key != "yyyyy" {
+	if key != "yyy" {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
