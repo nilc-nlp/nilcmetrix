@@ -32,7 +32,9 @@ from text_metrics.metrics.coref import *
 from text_metrics.metrics.disfluencies import *
 from text_metrics.metrics.lsa import *
 from text_metrics.metrics.aic import *
+from text_metrics.metrics.aic_palavras import *
 from text_metrics.metrics.liwc import *
 from text_metrics.metrics.guten import *
+from text_metrics.metrics.guten_palavras import *
 from text_metrics.metrics.manual import *
 from text_metrics.metrics.manual_print import *

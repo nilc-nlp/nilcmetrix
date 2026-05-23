@@ -21,22 +21,32 @@ import text_metrics.resource_pool
 
 class DelafStemmer(object):
 
-    """Docstring for DelafStemmer. """
+    """Stemmer backed by the `delaf_words` Postgres table.
+
+    Lemmas are deterministic given (word, pos), so results are memoized in a
+    process-wide dict to avoid redundant DB queries — every guten.py metric
+    re-stems the same content-word list, which on natural text drives many
+    tens of thousands of repeated lookups for the same handful of types.
+    """
 
     def __init__(self):
-        """@todo: to be defined1. """
-        pass
+        self._cache = {}
 
     def get_lemma(self, word, pos=None):
-
         if pos == "ADJ":
             pos = "A"
- 
+
         word = word.lower()
+        key = (word, pos)
 
-        delaf_word = text_metrics.resource_pool.rp.db_helper().get_delaf_word(word, pos)
+        if key in self._cache:
+            return self._cache[key]
 
+        helper = text_metrics.resource_pool.rp.db_helper()
+        delaf_word = helper.get_delaf_word(word, pos)
         if delaf_word is None:
-            delaf_word = text_metrics.resource_pool.rp.db_helper().get_delaf_word(word)
+            delaf_word = helper.get_delaf_word(word)
 
-        return delaf_word.lemma if delaf_word is not None else None
+        lemma = delaf_word.lemma if delaf_word is not None else None
+        self._cache[key] = lemma
+        return lemma

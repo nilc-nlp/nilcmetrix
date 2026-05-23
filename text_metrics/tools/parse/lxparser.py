@@ -19,6 +19,7 @@ from text_metrics.conf import config
 from text_metrics.tools.parse.api import Parser, TagSet
 from nltk.tree import Tree
 import subprocess
+from text_metrics.profiling import timed_block
 import tempfile
 import codecs
 import re
@@ -98,10 +99,11 @@ class LxParser(Parser):
             by LXParser.
         """
 
-        p = subprocess.Popen(self._cmd(filename),
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.STDOUT)
-        raw_lines = p.communicate()[0].decode('utf-8').split('\n')
+        with timed_block("jvm.stanford"):
+            p = subprocess.Popen(self._cmd(filename),
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT)
+            raw_lines = p.communicate()[0].decode('utf-8').split('\n')
         tree_lines = [line for line in raw_lines if line.startswith('(')]
         trees = [Tree.fromstring(line) for line in tree_lines]
 

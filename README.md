@@ -23,19 +23,61 @@ Leal, S.E., Duran, M.S., Scarton, C.E., Hartmann, N.S., Aluísio, S.M. NILC-Metr
 }
 ````
 
-Quick install guide videos with Docker (no audio, only showing steps):
----------------------------------------
-Part 1: Clone repository and download dependencies:
+Setup with Docker
+-----------------
+The steps below match the screencasts linked at the bottom of this section. They assume Docker is installed and running.
 
-https://youtu.be/brBfOuTMOM0
+### 1. Clone the repository
 
-Part 2: Create postgres container and restore database:
+```console
+$ git clone https://github.com/sidleal/nilcmetrix.git
+$ cd nilcmetrix
+```
 
-https://youtu.be/PR2dtr_FMBc
+### 2. Download the tools bundle
 
-Part 3: Build main container and test (with set of metrics that not depends on Palavras parser):
+Download [nilc-metrix-tools.zip](https://drive.google.com/file/d/1Ondvnz09RWDAX-1u3GIaXuAmkfKbGtqc/view?usp=sharing) (~2 GB) and unzip it at the repository root. The archive extracts to a `tools/` folder, so the layout becomes `nilcmetrix/tools/`.
 
-https://youtu.be/GKQH_1jrmEo
+### 3. Start PostgreSQL and restore the Coh-Metrix database
+
+```console
+$ cd tools/postgres
+$ docker run --name pgs_cohmetrix \
+    -e POSTGRES_USER=cohmetrix \
+    -e POSTGRES_PASSWORD=cohmetrix \
+    -v .:/shared \
+    -d postgres
+```
+
+The first run pulls the `postgres` image. Once the container is up, restore the dump from inside it:
+
+```console
+$ docker exec -ti pgs_cohmetrix bash
+# cd /shared
+# ls
+cohmetrix_pt_br  postgres.txt
+# pg_restore -U cohmetrix -d cohmetrix cohmetrix_pt_br
+```
+
+`pg_restore` may print a couple of warnings (e.g. `role "postgres" does not exist`, `schema "public" already exists`) — these are expected and safe to ignore. Exit the container shell when it finishes.
+
+### 4. Build the main image
+
+From the repository root:
+
+```console
+$ ./build.sh
+```
+
+This builds the `cohmetrix:focal` image using the local `Dockerfile`. From here you can run the full stack via `./run.sh` or use the pre-built Docker Hub image as described in the next section.
+
+### Screencasts
+
+The original walkthroughs (no audio) cover the same steps:
+
+- Part 1 — clone and download dependencies: https://youtu.be/brBfOuTMOM0
+- Part 2 — postgres container and database restore: https://youtu.be/PR2dtr_FMBc
+- Part 3 — build the main container and test (metrics that don't depend on the Palavras parser): https://youtu.be/GKQH_1jrmEo
 
 Another way to run with docker-hub pre-built image:
 ---------------------------------------

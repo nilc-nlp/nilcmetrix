@@ -21,6 +21,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, Float, Boolean
 from sqlalchemy.orm import sessionmaker
 
+from text_metrics.profiling import timed
+
 
 Base = declarative_base()
 
@@ -176,9 +178,11 @@ class Helper(object):
         """
         self._session = session
 
+    @timed("db.get_frequency")
     def get_frequency(self, word):
         return self._session.query(Frequency).filter_by(word=word).first()
 
+    @timed("db.get_frequencies_batch")
     def get_frequencies_batch(self, words):
         """Get frequencies for multiple words in a single query.
 
@@ -196,6 +200,7 @@ class Helper(object):
         # build final dict
         return {f.word: f for f in results}
 
+    @timed("db.get_hypernyms")
     def get_hypernyms(self, verb):
         """@todo: Docstring for get_hypernyms.
 
@@ -205,6 +210,7 @@ class Helper(object):
         """
         return self._session.query(Hypernym).filter_by(word=verb).first()
 
+    @timed("db.get_delaf_verb")
     def get_delaf_verb(self, verb):
         """@todo: Docstring for get_verb.
 
@@ -214,6 +220,7 @@ class Helper(object):
         """
         return self._session.query(DelafVerb).filter_by(word=verb).first()
 
+    @timed("db.get_delaf_noun")
     def get_delaf_noun(self, noun):
         """@todo: Docstring for get_noun.
 
@@ -223,6 +230,7 @@ class Helper(object):
         """
         return self._session.query(DelafNoun).filter_by(word=noun).first()
 
+    @timed("db.get_delaf_word")
     def get_delaf_word(self, word, pos=None):
         """@todo: Docstring for get_word.
 
@@ -240,6 +248,7 @@ class Helper(object):
 
         return result
 
+    @timed("db.get_tep_word")
     def get_tep_word(self, word, pos=None):
         """@todo: Docstring for get_tep_word.
 
@@ -257,6 +266,7 @@ class Helper(object):
 
         return result
 
+    @timed("db.get_all_tep_words")
     def get_all_tep_words(self, word, pos=None):
         """@todo: Docstring for get_all_tep_words.
 
@@ -274,6 +284,7 @@ class Helper(object):
 
         return result
 
+    @timed("db.get_tep_words_count")
     def get_tep_words_count(self, word, pos=None):
         """@todo: Docstring for get_tep_words_count.
 
@@ -291,6 +302,7 @@ class Helper(object):
 
         return result
 
+    @timed("db.get_connective")
     def get_connective(self, connective):
         """TODO: Docstring for get_connective.
 
@@ -301,6 +313,7 @@ class Helper(object):
         return self._session.query(Connective).filter_by(connective=connective)\
             .first()
 
+    @timed("db.get_all_connectives")
     def get_all_connectives(self):
         """TODO: Docstring for get_connective.
 

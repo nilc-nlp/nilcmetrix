@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 )
 
 type Metric struct {
@@ -284,8 +285,114 @@ func Router() *mux.Router {
 	r.HandleFunc("/simpligo-ranking", simpligoRankingHandler)
 	r.HandleFunc("/api/v1/metrix/{subset}/{key}", metricsHandler).Methods("POST")
 	r.HandleFunc("/api/v1/palavras/{retType}/{key}", palavrasHandler)
+	r.HandleFunc("/ws/metrix", wsMetrixHandler)
 
 	return r
+}
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		allowedOrigins := []string{
+			"https://pln.venturus.dev.br",
+		}
+
+		for _, allowed := range allowedOrigins {
+			if origin == allowed {
+				return true
+			}
+		}
+		log.Printf("Blocked WebSocket connection from unauthorized origin: %s\n", origin)
+		return false
+	},
+}
+
+type WSRequest struct {
+	Text    string `json:"text"`
+	Captcha string `json:"captcha"`
+}
+
+type WSResponse struct {
+	Status  string             `json:"status"` // "processing", "success", "error"
+	Message string             `json:"message"`
+	Results []MetrixResultItem `json:"results,omitempty"`
+}
+
+func wsMetrixHandler(w http.ResponseWriter, r *http.Request) {
+	// Upgrade the HTTP connection to a WebSocket connection
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println("WebSocket Upgrade error:", err)
+		return
+	}
+	defer conn.Close()
+
+	// 1. Read the incoming request
+	var req WSRequest
+	err = conn.ReadJSON(&req)
+	if err != nil {
+		conn.WriteJSON(WSResponse{Status: "error", Message: "Invalid request formatting."})
+		return
+	}
+
+	// 2. Validations
+	nWords := strings.Count(req.Text, " ") + 1
+	if nWords > 4000 {
+		conn.WriteJSON(WSResponse{Status: "error", Message: "Text is too big."})
+		return
+	}
+
+	remoteIP := strings.Split(r.RemoteAddr, ":")[0]
+	isHuman := ValidateTurnstile(req.Captcha, remoteIP)
+	if !isHuman {
+		conn.WriteJSON(WSResponse{Status: "error", Message: "Invalid Re-Captcha Validation."})
+		return
+	}
+
+	// 3. Notify the frontend that processing has started
+	conn.WriteJSON(WSResponse{Status: "processing", Message: "Analisando o texto, por favor aguarde... (Processing, wait...)"})
+
+	//Keep alive
+	// Create a channel to signal when the processing is done
+	done := make(chan bool)
+
+	// Start a Goroutine to send a Ping every 15 seconds
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				// WriteControl is safe to call concurrently with WriteJSON in gorilla/websocket
+				if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(time.Second)); err != nil {
+					log.Println("Ping error or connection closed:", err)
+					return
+				}
+			case <-done:
+				// The Python script finished, stop sending pings
+				return
+			}
+		}
+	}()
+
+	// 4. Run the long Python process
+	_, list, err := callMetrix("_all", req.Text)
+	if err != nil {
+		log.Println(err)
+		conn.WriteJSON(WSResponse{Status: "error", Message: "Error processando texto: " + err.Error()})
+		return
+	}
+
+	// 5. Format and send the results
+	sort.Sort(MetrixResultOrder(list))
+	for i := range list {
+		list[i].Index = i + 1
+	}
+
+	conn.WriteJSON(WSResponse{Status: "success", Results: list})
 }
 
 func main() {
@@ -425,6 +532,13 @@ func ValidateTurnstile(token string, remoteip string) bool {
 }
 
 func nilcMetrixCall(w http.ResponseWriter, r *http.Request, lang string) {
+	pInfo := pageInfo
+	pInfo.ShowResults = false
+	// Just serve the template. JS will handle the rest.
+	templateHandler(w, r, "nilcmetrix"+lang, pInfo)
+}
+
+func nilcMetrixCallOld(w http.ResponseWriter, r *http.Request, lang string) {
 
 	pInfo := pageInfo
 	pInfo.ShowResults = false

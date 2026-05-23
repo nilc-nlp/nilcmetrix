@@ -20,6 +20,7 @@ import os
 from text_metrics.tools.dependency.api import DependencyParser
 from text_metrics.conf import config
 from nltk.parse.malt import MaltParser as NltkMaltParser
+from text_metrics.profiling import timed_block
 
 
 class MaltParser(DependencyParser):
@@ -33,12 +34,13 @@ class MaltParser(DependencyParser):
         return self.tagger.tag(sent)
 
     def parse_sents(self, sents):
-        os.environ['MALT_PARSER'] = config['MALT_WORKING_DIR'] + '/malt.jar'
-        parser = NltkMaltParser(parser_dirname=config['MALT_WORKING_DIR'],
-                                model_filename=config['MALT_MCO'],
-                                additional_java_args=config['MALT_JAVA_ARGS'],
-                                tagger=self.tagger_func)
-        graphs = [list(graph)[0] for graph in parser.parse_sents(sents)]
+        with timed_block("jvm.malt"):
+            os.environ['MALT_PARSER'] = config['MALT_WORKING_DIR'] + '/malt.jar'
+            parser = NltkMaltParser(parser_dirname=config['MALT_WORKING_DIR'],
+                                    model_filename=config['MALT_MCO'],
+                                    additional_java_args=config['MALT_JAVA_ARGS'],
+                                    tagger=self.tagger_func)
+            graphs = [list(graph)[0] for graph in parser.parse_sents(sents)]
 
         # Sometimes, there is an empty graph at the end of the list. Delete it.
         if len(graphs) > 0 and len(graphs[-1].nodes) == 1:

@@ -55,25 +55,6 @@ def palavras_flat(t):
                    .replace('\\t', '\t') \
                    .replace('ß', 's')
 
-def palavras_tree(t):
-    '''
-    Call a webservice to run the parser Palavras
-
-    :param text: the text to be parsed, in unicode.
-    :return: the response string from Palavras
-    '''
-    params = {'sentence': t.raw_content}
-    data = urlencode(params).encode('utf-8')
-    f = urlopen(config['CALL_PALAVRAS_TREE'], data)
-    response = f.read()
-    f.close()
-
-    return response.decode('utf-8') \
-                   .replace('\\n', '\n') \
-                   .replace('\\t', '\t')
-                   #  .replace('ß', 's')
-
-
 # def palavras_flat(t):
 #     result = ""
 #     print("RESULT FROM PALAVRAS: ")

@@ -18,6 +18,7 @@
 from __future__ import unicode_literals, print_function, division
 from text_metrics.utils import is_valid_id
 from text_metrics.resource_pool import rp as default_rp
+from text_metrics.profiling import timed_block
 import numpy as np
 import codecs
 import collections
@@ -347,7 +348,8 @@ class Category(object):
             #print(m)
             try:
                 logger.info('Calculating metric %s.', m.name)
-                values.append((m, round(m.value_for_text(text), 5)))
+                with timed_block("metric." + m.column_name):
+                    values.append((m, round(m.value_for_text(text), 5)))
             except ZeroDivisionError:
                 values.append((m, 0))
 
