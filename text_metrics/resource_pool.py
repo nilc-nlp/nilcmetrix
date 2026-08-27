@@ -204,6 +204,7 @@ class DefaultResourcePool(ResourcePool):
 
         # LSA spaces
         self.register('lsa_space', self._lsa_space, pinned=True)
+        self.register('lsa_spans', self._lsa_spans)
 
         # Language models
         self.register('language_model', self._language_model, pinned=True)
@@ -707,6 +708,17 @@ class DefaultResourcePool(ResourcePool):
         """
         space = LsaSpace(config['LSA_MODEL_PATH'])
         return space
+
+    def _lsa_spans(self, text):
+        """Return the per-sentence LSA span array for `text`.
+
+        Cached per-Text by the unpinned resource cache. `lsa_span_mean`
+        and `lsa_span_std` both consume this resource so the O(n^2)
+        computation runs once per text instead of once per metric.
+        Deferred import avoids a metrics <-> resource_pool cycle.
+        """
+        from text_metrics.metrics.lsa import compute_lsa_spans
+        return compute_lsa_spans(text, self)
 
     def _language_model(self):
         """Return the default language model (a 3-gram model

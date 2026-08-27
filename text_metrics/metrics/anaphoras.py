@@ -108,9 +108,10 @@ class AnaphoricReferencesBase(base.Metric):
         tokens = rp.tagged_sentences(t)
 
         if len(tokens) <= 1:
-            return 0
+            return 0.0
 
         ncandidates = 0
+        npronouns = 0
         self.computed_categories = {}
         for isent in range(1, len(tokens)):
             iprev_sents = range(max(isent - self.nsentences, 0), isent)
@@ -121,7 +122,9 @@ class AnaphoricReferencesBase(base.Metric):
                         candidates = self.find_candidates(tokens, iprev_sents,
                                                           category, rp)
                         ncandidates += len(candidates)
-        return ncandidates / (len(tokens) - 1) if len(tokens) - 1 else 0
+                        npronouns += 1
+                        break  # each token is at most one pronoun
+        return ncandidates / npronouns if npronouns else 0.0
 
 
 class AnaphoricReferencesBaseList(base.Metric):
@@ -300,7 +303,7 @@ class AnaphoricReferences(AnaphoricReferencesBase):
         alunos, trabalhos); 3 para o “lhes” (professores, alunos, trabalhos); 11 para o segundo “eles” (todos, anos,
         erros, relatórios, trabalhos, prazos, alunos, relatórios, trabalhos, alunos, professores)
 
-        **Resultado Esperado**: 15/3 = 5,667
+        **Resultado Esperado**: 17/3 = 5,667
 
         **Resultado Obtido**: 5,667
 

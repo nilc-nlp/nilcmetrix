@@ -7,7 +7,7 @@ beyond a small float tolerance.
 
 ## Requirements
 
-- Docker, with the `cohmetrix:focal` image available locally.
+- Docker, with the `cohmetrix:noble` image available locally.
 - A running Postgres container exposing the cohmetrix lexical data, linked
   into the test container as `pgs_cohmetrix`. By default the host container
   is also named `pgs_cohmetrix`; override with `--pgs-container NAME`.

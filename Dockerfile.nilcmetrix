@@ -1,4 +1,4 @@
-FROM cohmetrix:focal
+FROM cohmetrix:noble
 
 WORKDIR /opt/text_metrics
 

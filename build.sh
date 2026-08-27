@@ -1,1 +1,1 @@
-docker build -t cohmetrix:focal .
+docker build -t cohmetrix:noble .

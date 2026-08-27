@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "text_metrics"
+version = "0.0.1"
+description = "Text complexity metrics for Brazilian Portuguese."
+requires-python = ">=3.10"
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools.packages.find]
+include = ["text_metrics*"]
+
+[tool.ruff]
+exclude = ["tools"]
+
+[tool.pyright]
+exclude = ["tools", "**/__pycache__", ".venv"]

@@ -1,0 +1,249 @@
+--- a/bin/nlpnet-load-embeddings.py
++++ b/bin/nlpnet-load-embeddings.py
+@@ -163,7 +163,7 @@
+             fields = line.split()
+             word = unicode(fields[0], 'utf-8')
+             vector = np.fromiter((float(x) for x in fields[1:]), 
+-                                 dtype=np.float)
++                                 dtype=float)
+             model[word] = vector
+     
+     def dep_filter(word):
+--- a/bin/nlpnet-train.py
++++ b/bin/nlpnet-train.py
+@@ -104,7 +104,7 @@
+         num_tags = len(text_reader.tag_dict)
+         nn = Network.create_new(feature_tables, args.window, args.hidden, num_tags)
+         if args.learning_rate_transitions > 0:
+-            transitions = np.zeros((num_tags + 1, num_tags), np.float)
++            transitions = np.zeros((num_tags + 1, num_tags), float)
+             nn.transitions = transitions
+             nn.learning_rate_trans = args.learning_rate_transitions
+ 
+--- a/nlpnet/network.pyx
++++ b/nlpnet/network.pyx
+@@ -177,7 +177,7 @@
+         self.input_size = input_size
+         self.hidden_size = hidden_size
+         self.output_size = output_size
+-        self.features_per_token = input_size / word_window
++        self.features_per_token = input_size // word_window
+         
+         # A_i_j score for jumping from tag i to j
+         # A_0_i = transitions[-1]
+@@ -244,7 +244,7 @@
+     
+         def __set__(self, np.ndarray padding_left):
+             self.padding_left = padding_left
+-            self.pre_padding = np.array((self.word_window_size / 2) * [padding_left])
++            self.pre_padding = np.array((self.word_window_size // 2) * [padding_left])
+     
+     property padding_right:
+         """
+@@ -256,7 +256,7 @@
+     
+         def __set__(self, np.ndarray padding_right):
+             self.padding_right = padding_right
+-            self.pos_padding = np.array((self.word_window_size / 2) * [padding_right])
++            self.pos_padding = np.array((self.word_window_size // 2) * [padding_right])
+     
+     def tag_sentence(self, np.ndarray sentence):
+         """
+@@ -389,7 +389,7 @@
+         # dC / dftheta
+         self.net_gradients = np.zeros((len(tags), self.output_size))
+         # dC / dA
+-        self.trans_gradients = np.zeros_like(self.transitions, np.float)
++        self.trans_gradients = np.zeros_like(self.transitions, float)
+         
+         # things get nasty from here
+         # refer to the papers to understand what exactly is going on
+@@ -502,7 +502,7 @@
+             return scores.argmax(1)
+             
+         path_scores = np.empty_like(scores)
+-        path_backtrack = np.empty_like(scores, np.int)
++        path_backtrack = np.empty_like(scores, int)
+         
+         # now the actual Viterbi algorithm
+         # first, get the scores for each tag at token 0
+@@ -524,7 +524,7 @@
+                                                   output_range] + scores[i]
+             
+         # now find the maximum score for the last token and follow the backtrack
+-        answer = np.empty(len(scores), dtype=np.int)
++        answer = np.empty(len(scores), dtype=int)
+         answer[-1] = path_scores[-1].argmax()
+         self.answer_score = path_scores[-1][answer[-1]]
+         previous_tag = path_backtrack[-1][answer[-1]]
+@@ -789,7 +789,7 @@
+         """
+         Loads weights, feature tables and transition tables previously saved.
+         """
+-        data = np.load(self.network_filename)
++        data = np.load(self.network_filename, allow_pickle=True)
+         self.hidden_weights = data['hidden_weights']
+         self.hidden_bias = data['hidden_bias']
+         self.output_weights = data['output_weights']
+@@ -824,7 +824,7 @@
+         It will load weights, biases, sizes, padding, 
+         and feature tables.
+         """
+-        data = np.load(filename)
++        data = np.load(filename, allow_pickle=True)
+         
+         # cython classes don't have the __dict__ attribute
+         # so we can't do an elegant self.__dict__.update(data)
+@@ -848,8 +848,8 @@
+         
+         nn.padding_left = data['padding_left']
+         nn.padding_right = data['padding_right']
+-        nn.pre_padding = np.array((nn.word_window_size / 2) * [nn.padding_left])
+-        nn.pos_padding = np.array((nn.word_window_size / 2) * [nn.padding_right])
++        nn.pre_padding = np.array((nn.word_window_size // 2) * [nn.padding_left])
++        nn.pos_padding = np.array((nn.word_window_size // 2) * [nn.padding_right])
+         nn.feature_tables = list(data['feature_tables'])
+         nn.network_filename = filename
+         
+--- a/nlpnet/networkconv.pyx
++++ b/nlpnet/networkconv.pyx
+@@ -127,8 +127,8 @@
+                                                    hidden1_size, output_size, 
+                                                    hidden1_weights, hidden1_bias, 
+                                                    output_weights, output_bias)
+-        self.half_window = word_window / 2
+-        self.features_per_token = self.input_size / word_window
++        self.half_window = word_window // 2
++        self.features_per_token = self.input_size // word_window
+         
+         self.transitions = None
+         self.target_dist_lookup = None
+@@ -228,7 +228,7 @@
+         It will load weights, biases, sizes, padding and 
+         distance tables, and other feature tables.
+         """
+-        data = np.load(filename)
++        data = np.load(filename, allow_pickle=True)
+         return cls._load_from_file(data, filename)
+     
+     def _load_parameters(self):
+@@ -236,7 +236,7 @@
+         Loads weights, feature tables, distance tables and 
+         transition tables previously saved.
+         """
+-        data = np.load(self.network_filename)
++        data = np.load(self.network_filename, allow_pickle=True)
+         self.hidden_weights = data['hidden_weights']
+         self.hidden_bias = data['hidden_bias']
+         self.output_weights = data['output_weights']
+@@ -447,7 +447,7 @@
+         if training:
+             # hidden sent values: results after tanh
+             self.hidden_values = np.zeros((self.num_targets, self.hidden_size))
+-            self.max_indices = np.empty((self.num_targets, self.hidden_size), np.int)
++            self.max_indices = np.empty((self.num_targets, self.hidden_size), int)
+     
+         # predicate distances are the same across all targets
+         pred_dist_indices = np.arange(len(sentence)) - predicate
+@@ -616,7 +616,7 @@
+         
+         :returns: whether a correction is necessary or not.
+         """
+-        self.net_gradients = np.zeros_like(scores, np.float)
++        self.net_gradients = np.zeros_like(scores, float)
+         correction = False
+         
+         for i, tag_scores in enumerate(scores):
+@@ -881,7 +881,7 @@
+             return best_scores
+         
+         path_scores = np.empty_like(scores)
+-        path_backtrack = np.empty_like(scores, np.int)
++        path_backtrack = np.empty_like(scores, int)
+         
+         # now the actual Viterbi algorithm
+         # first, get the scores for each tag at token 0
+@@ -899,7 +899,7 @@
+                                                   np.arange(self.output_size)] + scores[i]
+             
+         # now find the maximum score for the last token and follow the backtrack
+-        answer = np.empty(len(scores), dtype=np.int)
++        answer = np.empty(len(scores), dtype=int)
+         answer[-1] = path_scores[-1].argmax()
+         self.answer_score = path_scores[-1][answer[-1]]
+         previous_tag = path_backtrack[-1][answer[-1]]
+--- a/nlpnet/srl/srl_reader.py
++++ b/nlpnet/srl/srl_reader.py
+@@ -403,7 +403,7 @@
+                 new_sent.append(new_token)
+             
+             if self.task == 'srl_predicates':    
+-                sentence_tags = np.zeros(len(sent), np.int)
++                sentence_tags = np.zeros(len(sent), int)
+                 if len(preds) > 0:
+                     sentence_tags[preds] = 1
+             else:
+--- a/nlpnet/srl/train_srl.py
++++ b/nlpnet/srl/train_srl.py
+@@ -30,7 +30,7 @@
+     trans = lambda x: 0 if x in 'BOS' else -1000
+     transitions.append([trans(next_tag) for next_tag in tags])
+     
+-    return np.array(transitions, np.float)
++    return np.array(transitions, float)
+ 
+ 
+ def init_transitions(tag_dict, scheme):
+@@ -83,5 +83,5 @@
+     trans = lambda x: 0 if x[0] in 'OBS' else -1000
+     transitions.append([trans(next_tag) for next_tag in tags])
+     
+-    return np.array(transitions, np.float)
++    return np.array(transitions, float)
+ 
+--- a/nlpnet/utils.py
++++ b/nlpnet/utils.py
+@@ -412,7 +412,7 @@
+ 
+ def load_features_from_file(features_file):
+     """Reads a file with features written as binary data."""
+-    return np.load(features_file)
++    return np.load(features_file, allow_pickle=True)
+ 
+ def save_features_to_file(table, features_file):
+     """Saves a feature table to a given file, writing binary data."""
+@@ -456,6 +456,6 @@
+         elif tag == 'E':
+             limits.append([start, i])
+     
+-    return np.array(limits, np.int)
++    return np.array(limits, int)
+ 
+ 
+--- a/setup.py
++++ b/setup.py
+@@ -1,6 +1,7 @@
+ import sys
+-from distutils.core import setup
+-from distutils.extension import Extension
++from setuptools import setup
++from setuptools.extension import Extension
++from Cython.Build import cythonize
+ 
+ 
+ try:
+@@ -20,10 +21,10 @@
+ setup(name='nlpnet',
+       description='Neural networks for NLP tasks',
+       packages=['nlpnet', 'nlpnet.pos', 'nlpnet.srl'],
+-      ext_modules=[Extension("nlpnet.network",
+-                             ["nlpnet/network.c"],
+-                             include_dirs=['.', np.get_include()]),
+-                   ],
++      ext_modules=cythonize([Extension("nlpnet.network",
++                                       ["nlpnet/network.pyx"],
++                                       include_dirs=['.', np.get_include()])],
++                            language_level=3),
+       scripts=['bin/nlpnet-tag.py',
+                'bin/nlpnet-train.py',
+                'bin/nlpnet-test.py',

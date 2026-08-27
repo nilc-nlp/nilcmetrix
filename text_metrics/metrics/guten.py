@@ -3569,6 +3569,10 @@ class ContentWordsAmbiguity(base.Metric):
     def value_for_text(self, t, rp=default_rp):
         adjectives = get_meanings_count(rp, t, 'A', 'Adjetivo',
                                          rp.pos_tagger().tagset.is_adjective)
+        # Bare is_adverb here, not _counts_as_adverb: this counts dictionary
+        # word-senses per POS class, and PDEN denotative words ("também", "só")
+        # have no entry in that ambiguity lexicon — they belong only to the
+        # adverb-frequency metrics, not to this meaning count.
         adverbs = get_meanings_count(rp, t, 'ADV', 'Advérbio',
                                       rp.pos_tagger().tagset.is_adverb)
         nouns = get_meanings_count(rp, t, 'N', 'Substantivo',
@@ -4210,6 +4214,17 @@ class PronounDiversity(base.Metric):
             return 0
 
 
+def _counts_as_adverb(token):
+    """Whether a tagged token counts as an adverb for the adverbs_* metrics.
+
+    One definition shared by adverbs, adverbs_diversity_ratio, adverbs_min,
+    adverbs_max and adverbs_standard_deviation: an ADV/PREP+ADV tag, or a PDEN
+    denotative word (só, também, ainda, ...).
+    """
+    return (pos_tagger.tagset.is_adverb(token)
+            or pos_tagger.tagset.is_denotative_word(token))
+
+
 class AdverbsMin(base.Metric):
     """
         **Nome da Métrica**: adverbs min
@@ -4256,8 +4271,8 @@ class AdverbsMin(base.Metric):
         sents = [list(filterfalse(pos_tagger.tagset.is_punctuation,
                                   i)) for i in rp.tagged_sentences(t)]
         sents_count = [len(i) for i in sents]
-        adverbs = [filter(pos_tagger.tagset.is_adverb, i) for i in sents]
-        adverbs = [len(list(i)) for i in adverbs]
+        adverbs = [sum(1 for tok in i if _counts_as_adverb(tok))
+                   for i in sents]
 
         result = [adverbs[i] / sents_count[i] for i in range(len(adverbs))]
         return np.array(result).min()
@@ -4309,8 +4324,8 @@ class AdverbsMax(base.Metric):
         sents = [list(filterfalse(pos_tagger.tagset.is_punctuation,
                                   i)) for i in rp.tagged_sentences(t)]
         sents_count = [len(i) for i in sents]
-        adverbs = [filter(pos_tagger.tagset.is_adverb, i) for i in sents]
-        adverbs = [len(list(i)) for i in adverbs]
+        adverbs = [sum(1 for tok in i if _counts_as_adverb(tok))
+                   for i in sents]
 
         result = [adverbs[i] / sents_count[i] for i in range(len(adverbs))]
         return np.array(result).max()
@@ -4362,8 +4377,8 @@ class AdverbsStandardDeviation(base.Metric):
         sents = [list(filterfalse(pos_tagger.tagset.is_punctuation,
                                   i)) for i in rp.tagged_sentences(t)]
         sents_count = [len(i) for i in sents]
-        adverbs = [filter(pos_tagger.tagset.is_adverb, i) for i in sents]
-        adverbs = [len(list(i)) for i in adverbs]
+        adverbs = [sum(1 for tok in i if _counts_as_adverb(tok))
+                   for i in sents]
 
         result = [adverbs[i] / sents_count[i] for i in range(len(adverbs))]
         return np.array(result).std()
@@ -4412,8 +4427,7 @@ class AdverbDiversity(base.Metric):
 
     def value_for_text(self, t, rp=default_rp):
         adverbs = [i[0].lower() for i in rp.tagged_words(t)
-                   if pos_tagger.tagset.is_adverb(i)
-                   or pos_tagger.tagset.is_denotative_word(i)]
+                   if _counts_as_adverb(i)]
         # unique = len(set(adverbs))
         try:
             return rp.mattr(adverbs)
@@ -5166,9 +5180,9 @@ class GunningFog(base.Metric):
 
         **Contagens**: 19 palavras com 3 ou mais sílabas em 38 palavras e 2 sentenças
 
-        **Resultado Esperado**: (38/2 + 19/38) x 0,4 => 19,5 x 0,4 = 7,8
+        **Resultado Esperado**: (38/2 + 100 × 19/38) x 0,4 => 69 x 0,4 = 27,6
 
-        **Resultado Obtido**: 7,8
+        **Resultado Obtido**: 27,6
 
         **Status**: correto
     """
@@ -5182,7 +5196,7 @@ class GunningFog(base.Metric):
         syllables = list(map(syllable_separator.separate, rp.all_words(t)))
         complex_words = [i for i in syllables if len(i) >= 3]
         average_words = len(words) / ilen(sentences)
-        percentage_complex = len(complex_words) / len(words)
+        percentage_complex = 100 * len(complex_words) / len(words)
         return 0.4 * (average_words + percentage_complex)
 
 
@@ -5253,6 +5267,29 @@ class ContentDensity(base.Metric):
         return ilen(content_words) / ilen(function_words)
 
 
+# Single definition of "a punctuation sign", shared by PunctuationRatio and
+# PunctuationDiversity so the two metrics can never disagree on the same text.
+# Run with re.findall over t.raw_content; each match is one punctuation token.
+#
+# Counted:   . , : ; ! ? ( )   reticências (..+)   travessão (—, –, or a hyphen
+#            flanked by whitespace, i.e. used as a dialogue dash).
+# NOT counted:
+#   - digits and "/": the old class wrote the hyphen as the range ",-:", which
+#     regex expanded to ",-./0-9:" — so every digit and slash was miscounted as
+#     punctuation. They are not punctuation; keep the hyphen a literal, last.
+#   - the hyphen inside compound words (terça-feira, guarda-chuva): it joins a
+#     word and is not a sign, so the bare "-" stays out of the class and is only
+#     matched via the \s-flanked alternation above.
+# This is raw-character counting; it is unrelated to the tag-based
+# tagset.is_punctuation() path (POS tag == 'PU'/'PUNCT') used elsewhere.
+_PUNCTUATION = re.compile('''
+                          \\.\\.+|         # ponto final e reticências
+                          \\s+\\-|\\-\\s+| # travessão escrito como hífen
+                          [.!(),:;?—–]     # demais pontuações
+                          ''',
+                          re.VERBOSE)
+
+
 class PunctuationRatio(base.Metric):
     """
         **Nome da Métrica**: punctuation_ratio
@@ -5300,13 +5337,8 @@ class PunctuationRatio(base.Metric):
     column_name = 'punctuation_ratio'
 
     def value_for_text(self, t, rp=default_rp):
-        expression = re.compile('''
-                                \\.\\.+|       # ponto final e reticências
-                                [.!(),-:;?]    # Demais pontuações
-                                ''',
-                                re.VERBOSE)
         try:
-            return len(re.findall(expression, t.raw_content)) /\
+            return len(re.findall(_PUNCTUATION, t.raw_content)) /\
                 len(rp._all_tokens(t))
         except ZeroDivisionError:
             return 0
@@ -5360,14 +5392,8 @@ class PunctuationDiversity(base.Metric):
     column_name = 'punctuation_diversity'
 
     def value_for_text(self, t, rp=default_rp):
-        expression = re.compile('''
-                                \\.\\.+|         # ponto final e reticências
-                                \\s+\\-|\\-\\s+| # hifens
-                                [.!(),–:;?]      # Demais pontuações
-                                ''',
-                                re.VERBOSE)
         try:
-            puncts = re.findall(expression, t.raw_content)
+            puncts = re.findall(_PUNCTUATION, t.raw_content)
             return rp.mattr(puncts)
             # return len(set(puncts)) / len(puncts)
         except ZeroDivisionError:

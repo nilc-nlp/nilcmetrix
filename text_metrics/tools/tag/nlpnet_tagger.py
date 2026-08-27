@@ -16,10 +16,16 @@
 # this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import unicode_literals, print_function, division
+import re
+
 import nlpnet
 from text_metrics.tools.tag.api import Tagger
 from text_metrics.tools.tag.macmorpho import MacMorphoTagSet
 from text_metrics.conf import config
+
+# Matches a token made up entirely of dash characters (travessão, en-dash,
+# horizontal bar, hyphen) and runs thereof.
+_DASH_ONLY = re.compile(r'^[—–―-]+$')
 
 
 class NLPNetTagger(Tagger):
@@ -41,4 +47,31 @@ class NLPNetTagger(Tagger):
     def tag(self, tokens):
         if not self._tagger:
             self.load_tagger()
-        return list(zip(tokens, self._tagger.tag_tokens(tokens)))
+        assert self._tagger is not None
+        tags = self._tagger.tag_tokens(tokens)
+        return [(tok, self._clean_tag(tok, tag))
+                for tok, tag in zip(tokens, tags)]
+
+    @staticmethod
+    def _clean_tag(token, tag):
+        """Fix systematic nlpnet mis-taggings for a single token.
+
+        nlpnet tags some standalone symbols as nouns, which inflates word/noun
+        counts and poisons the min-frequency metrics (the symbol is treated as a
+        rare unknown word). Force them to "PU":
+
+        - dash-only tokens — a sentence-initial travessão would otherwise add
+          ~one noun per dialogue turn;
+        - a standalone "&" — in the corpus it is the connector in firm names and
+          paired titles ("Mawson & Williams"), semantically "e", never a noun.
+
+        Tokens that carry letters keep their real tag, so "bem-vindo" never
+        matches the dash rule. (The tokenizer does split "AT&T" into AT / & / T,
+        so that inner "&" is normalized too; harmless — it de-inflates an
+        already-fragmented brand's noun count rather than the reverse.)
+
+        Add more corrections here as further mis-taggings are found.
+        """
+        if _DASH_ONLY.match(token) or token == '&':
+            return 'PU'
+        return tag

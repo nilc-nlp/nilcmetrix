@@ -1,0 +1,12 @@
+.git
+.venv
+DATA
+env
+tools/postgres
+tools/PALAVRAS
+**/__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage

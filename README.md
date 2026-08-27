@@ -69,7 +69,7 @@ From the repository root:
 $ ./build.sh
 ```
 
-This builds the `cohmetrix:focal` image using the local `Dockerfile`. From here you can run the full stack via `./run.sh` or use the pre-built Docker Hub image as described in the next section.
+This builds the `cohmetrix:noble` image using the local `Dockerfile`. From here you can run the full stack via `./run.sh` or use the pre-built Docker Hub image as described in the next section.
 
 ### Screencasts
 

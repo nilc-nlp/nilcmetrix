@@ -20,8 +20,6 @@ from __future__ import unicode_literals, print_function, division
 import pickle
 
 import numpy as np
-from gensim.matutils import cossim
-from scipy import spatial
 
 
 class LsaSpace(object):
@@ -29,64 +27,62 @@ class LsaSpace(object):
     between text fragments (texts, paragraphs, sentences, and so on).
     """
 
+    # Fallback for words not in the LSA model. Read-only at call sites,
+    # so a single shared array is enough.
+    _UNKNOWN_WORD_VECTOR = np.full(300, 0.001)
+
     def __init__(self, model_path):
         """Load an LSA space from a file.
 
-        :dict_path: path to the dictionary file.
         :model_path: path to the model file.
         """
         f = open(model_path, 'rb')
         self._lsa_model = pickle.load(f)
         f.close()
 
+        # The same sentence is fed to LSA many times within a run:
+        # `LsaSentenceAllMean` makes N*(N-1)/2 sentence-pair calls (each
+        # sentence appears in N-1 pairs), `LsaSpanBase` recomputes every
+        # past sentence's vector at every span step (~N^2/2 calls total).
+        # `get_vector` is a pure function of the token sequence, so
+        # caching by `tuple(tokens)` collapses the redundancy.
+        self._vector_cache = {}
+
     def word2vec(self, word):
-        if word.lower() in self._lsa_model:
-            return self._lsa_model[word.lower()]
+        return self._lsa_model.get(word.lower(), LsaSpace._UNKNOWN_WORD_VECTOR)
+
+    def get_vector(self, tokens):
+        """Return the dense num_topics-dimensional LSA vector for a
+        sentence, memoized per process by token tuple. Returns an
+        all-zero vector if no token survives the len(word) > 2 filter.
+        """
+        key = tuple(tokens)
+        cached = self._vector_cache.get(key)
+        if cached is not None:
+            return cached
+
+        word_vec = [self.word2vec(w) for w in tokens if len(w) > 2]
+        if not word_vec:
+            dense = np.zeros(self.num_topics)
         else:
-            return np.full(self.num_topics, 0.001)
+            dense = np.array(word_vec).mean(axis=0)
 
-    def doc2vec(self, tokens):
-        word_vec = []
-        for word in tokens:
-            if len(word) > 2:
-                vec = self.word2vec(word)
-                word_vec.append(vec)
-        if len(word_vec) < 1:
-            return []
-        doc_vec = np.average(word_vec, axis=0)
-        ids = list(range(0, self.num_topics))
-        zdoc_vec = list(zip(ids, doc_vec))
-        return zdoc_vec
-
-    def get_vector(self, doc):
-        return self.doc2vec(doc)
+        self._vector_cache[key] = dense
+        return dense
 
     @property
     def num_topics(self):
         """Return the number of topics in the model."""
         return 300
 
-    def compute_similarity(self, doc1, doc2):
-        """Compute the cosine similarity between two documents.
-
-        :doc1: a list of strings, representing the first document.
-        :doc2: a list of strings, representing the second document.
-        :returns: a number between -1 and 1, representing the similarity
-        between the two documents.
+    @staticmethod
+    def compute_similarity(v1, v2):
+        """Cosine similarity on dense numpy arrays. Returns 0.0 if
+        either input has zero norm (matches gensim's `cossim` on
+        empty sparse vectors).
         """
-        return cossim(self.get_vector(doc1), self.get_vector(doc2))
-
-
-if __name__ == '__main__':
-    from text_metrics.conf import config
-
-    space = LsaSpace(config['LSA_MODEL_PATH'])
-
-    print(space.compute_similarity('o livro está sobre a mesa do menino'.split(' '),
-                                   'o livro está sobre a cadeira'.split(' ')))
-
-    print(space.compute_similarity('o livro está sobre a mesa'.split(' '),
-                                   'o livro está sobre a árvore'.split(' ')))
-
-    print(space.compute_similarity('o livro está sobre a mesa'.split(' '),
-                                   'maria foi ao mercado'.split(' ')))
+        n1 = np.linalg.norm(v1)
+        n2 = np.linalg.norm(v2)
+        if n1 == 0.0 or n2 == 0.0:
+            return 0.0
+        return float(np.dot(v1, v2) / (n1 * n2))

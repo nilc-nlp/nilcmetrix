@@ -65,5 +65,5 @@ esac
 exec docker run --rm \
     --link "${PGS_CONTAINER}:pgs_cohmetrix" \
     -v "$REPO_ROOT":/opt/text_metrics \
-    cohmetrix:focal \
+    cohmetrix:noble \
     bash -c "$INNER"
